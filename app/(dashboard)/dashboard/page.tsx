@@ -4,9 +4,17 @@ import { useState, useEffect } from "react";
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
+  const [partnerName, setPartnerName] = useState("partner team");
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const savedName = localStorage.getItem("partner_name")?.trim();
+    if (savedName) {
+      setPartnerName(savedName);
+    }
   }, []);
 
   const stats = [
@@ -73,9 +81,9 @@ export default function DashboardPage() {
     <section className="space-y-8">
       {/* Welcome Header with Animation */}
       <div className={`transition-all duration-700 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">CHARITY DASHBOARD</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400"></p>
         <h1 className="mt-2 bg-gradient-to-r from-[#006B68] to-[#19BBB6] bg-clip-text text-4xl font-bold text-transparent">
-          Welcome back, partner team.
+          Welcome back, {partnerName}.
         </h1>
         <p className="mt-2 text-gray-600">
           Keep an eye on redemptions, balances, and branch activity.

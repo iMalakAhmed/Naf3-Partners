@@ -13,7 +13,6 @@ export default function PartnerLoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -43,6 +42,14 @@ export default function PartnerLoginPage() {
       if (data?.token) {
         localStorage.setItem("partner_token", data.token);
       }
+      const trimmedName = name.trim();
+      const trimmedBranch = branch.trim();
+      if (trimmedName) {
+        localStorage.setItem("partner_name", trimmedName);
+      }
+      if (trimmedBranch) {
+        localStorage.setItem("partner_branch", trimmedBranch);
+      }
 
       router.push("/dashboard");
     } catch (submitError) {
@@ -55,134 +62,124 @@ export default function PartnerLoginPage() {
   };
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 p-4">
-      {/* Animated Blobs */}
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f4f7f5] px-4 py-10 text-zinc-900 sm:px-6">
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-20 -top-20 h-96 w-96 animate-blob rounded-full bg-[#006B68]/20 mix-blend-multiply blur-3xl filter" />
-        <div className="animation-delay-2000 absolute -right-20 -top-20 h-96 w-96 animate-blob rounded-full bg-[#19BBB6]/20 mix-blend-multiply blur-3xl filter" />
-        <div className="animation-delay-4000 absolute -bottom-20 left-20 h-96 w-96 animate-blob rounded-full bg-[#FFC012]/20 mix-blend-multiply blur-3xl filter" />
-        <div className="animation-delay-6000 absolute -bottom-20 -right-20 h-96 w-96 animate-blob rounded-full bg-[#006B68]/20 mix-blend-multiply blur-3xl filter" />
+        <div className="absolute -left-24 -top-24 h-96 w-96 animate-blob rounded-full bg-[#006B6A]/20 blur-3xl" />
+        <div className="animation-delay-2000 absolute -right-28 -top-20 h-96 w-96 animate-blob rounded-full bg-[#19BBB6]/25 blur-3xl" />
+        <div className="animation-delay-4000 absolute -bottom-24 left-12 h-96 w-96 animate-blob rounded-full bg-[#FFC012]/20 blur-3xl" />
+        <div className="animation-delay-6000 absolute -bottom-24 -right-24 h-96 w-96 animate-blob rounded-full bg-[#006B6A]/15 blur-3xl" />
       </div>
-
-      {/* Language Toggle */}
-      <div className="absolute right-6 top-6 z-20 flex gap-2">
-        <button className="rounded-lg bg-white/80 px-4 py-2 text-sm font-semibold text-[#006B68] shadow-lg backdrop-blur-sm transition-all hover:bg-white">
-          EN
-        </button>
-        <button className="rounded-lg bg-white/60 px-4 py-2 text-sm font-medium text-gray-700 shadow-lg backdrop-blur-sm transition-all hover:bg-white/80">
-          العربية
-        </button>
-      </div>
-
-      {/* Card */}
-      <div className="relative z-10 w-full max-w-md">
-        <div className="rounded-3xl bg-white/90 px-8 py-12 shadow-2xl backdrop-blur-xl">
-          {/* Header */}
-          <div className="mb-10 text-center">
-            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#006B68] to-[#19BBB6] shadow-lg">
-              <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
+      <div className="relative z-10 mx-auto flex w-full max-w-4xl flex-col overflow-hidden rounded-[28px] border border-[#19BBB6]/20 bg-white shadow-[0_30px_90px_-50px_rgba(0,107,106,0.5)] lg:flex-row">
+        <section className="relative flex-1 bg-[linear-gradient(135deg,#006B6A_0%,#19BBB6_55%,#FFC012_120%)] p-8 text-white sm:p-10">
+          <div className="absolute inset-0 opacity-20">
+            <div className="absolute left-6 top-10 h-36 w-36 rounded-full bg-white/30 blur-2xl" />
+            <div className="absolute bottom-10 right-10 h-44 w-44 rounded-full bg-white/20 blur-3xl" />
+          </div>
+          <div className="relative z-10 space-y-6">
+            <p className="text-xs uppercase tracking-[0.35em] text-white/80">
+              Naf3 Partners
+            </p>
+            <h1 className="text-3xl font-semibold leading-tight sm:text-4xl">
+              Welcome back.
+              <span className="block text-[#FFC012]">
+                Manage requests, rewards, and impact.
+              </span>
+            </h1>
+            <p className="text-sm text-white/85">
+              Access your partner dashboard to review redemptions, monitor
+              points, and coordinate with your branch team.
+            </p>
+            <div className="mt-8 space-y-3 text-sm text-white/85">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-xs">
+                  01
+                </span>
+                Access rewards, requests, and daily partner operations.
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-xs">
+                  02
+                </span>
+                Track rewards, requests, and performance.
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-xs">
+                  03
+                </span>
+                Use the credentials provided by the Naf3 admin team.
+              </div>
             </div>
-            <h1 className="mb-2 text-3xl font-bold text-gray-900">Log In</h1>
-            <p className="text-gray-600">Enter your personal details.</p>
+          </div>
+        </section>
+
+        <section className="flex-1 px-6 py-10 sm:px-10 sm:py-12">
+          <div className="space-y-3">
+            <p className="text-xs uppercase tracking-[0.25em] text-[#006B6A]">
+              Partner Login
+            </p>
+            <h2 className="text-2xl font-semibold text-zinc-900">
+              Sign in to your branch
+            </h2>
+            <p className="text-sm text-zinc-500">
+              Use the credentials provided by the Naf3 admin team.
+            </p>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email/Name */}
-            <div>
-              <div className="relative">
-                <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2">
-                  <svg className="h-5 w-5 text-[#006B68]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-                <input
-                  type="text"
-                  autoComplete="name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-4 pl-12 text-gray-900 placeholder-gray-400 outline-none transition-colors focus:border-[#19BBB6]"
-                  placeholder="Email"
-                  required
-                />
-              </div>
-            </div>
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+            <label className="block text-sm font-medium text-zinc-700">
+              Name
+              <input
+                type="text"
+                autoComplete="name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="mt-2 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm outline-none transition focus:border-[#19BBB6] focus:bg-white focus:ring-2 focus:ring-[#19BBB6]/20"
+                placeholder="Partner name"
+                required
+              />
+            </label>
 
-            {/* Branch */}
-            <div>
-              <div className="relative">
-                <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2">
-                  <svg className="h-5 w-5 text-[#006B68]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                </div>
-                <input
-                  type="text"
-                  autoComplete="organization"
-                  value={branch}
-                  onChange={(event) => setBranch(event.target.value)}
-                  className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-4 pl-12 text-gray-900 placeholder-gray-400 outline-none transition-colors focus:border-[#19BBB6]"
-                  placeholder="Branch"
-                  required
-                />
-              </div>
-            </div>
+            <label className="block text-sm font-medium text-zinc-700">
+              Branch
+              <input
+                type="text"
+                autoComplete="organization"
+                value={branch}
+                onChange={(event) => setBranch(event.target.value)}
+                className="mt-2 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm outline-none transition focus:border-[#19BBB6] focus:bg-white focus:ring-2 focus:ring-[#19BBB6]/20"
+                placeholder="Branch name"
+                required
+              />
+            </label>
 
-            {/* Password */}
-            <div>
-              <div className="relative">
-                <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2">
-                  <svg className="h-5 w-5 text-[#006B68]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                </div>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-4 pl-12 pr-12 text-gray-900 placeholder-gray-400 outline-none transition-colors focus:border-[#19BBB6]"
-                  placeholder="Password"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
-                >
-                  {showPassword ? (
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                    </svg>
-                  ) : (
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
+            <label className="block text-sm font-medium text-zinc-700">
+              Password
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="mt-2 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm outline-none transition focus:border-[#19BBB6] focus:bg-white focus:ring-2 focus:ring-[#19BBB6]/20"
+                placeholder="Enter your password"
+                required
+              />
+            </label>
 
-            {/* Error */}
-            {error && (
-              <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">
+            {error ? (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {error}
               </div>
-            )}
+            ) : null}
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full rounded-xl bg-[#006B68] py-4 font-semibold text-white transition-all hover:bg-[#006B68]/90 disabled:opacity-50"
+              className="w-full rounded-2xl bg-[#006B6A] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[#006B6A]/30 transition hover:bg-[#19BBB6] disabled:cursor-not-allowed disabled:bg-[#19BBB6]/50"
             >
-              {isSubmitting ? "Signing in..." : "Log In"}
+              {isSubmitting ? "Signing in..." : "Sign in"}
             </button>
           </form>
-        </div>
+        </section>
       </div>
     </main>
   );
