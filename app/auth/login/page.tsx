@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-const LOGIN_ENDPOINT =
-  "https://nafaa-frfve0gyfyatgzh0.uaenorth-01.azurewebsites.net/api/auth/partner/login";
+const LOGIN_ENDPOINT = "/api/auth/partner/login";
 
 export default function PartnerLoginPage() {
   const router = useRouter();
