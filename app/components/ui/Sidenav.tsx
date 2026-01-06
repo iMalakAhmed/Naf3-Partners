@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -7,7 +8,7 @@ type NavItem = {
   key: "dashboard" | "transactions" | "redeemPoints" | "profile";
   href: string;
   label: string;
-  icon: (props: { className?: string }) => JSX.Element;
+  icon: (props: { className?: string }) => ReactNode;
 };
 
 const navItems: NavItem[] = [
