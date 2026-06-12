@@ -2,295 +2,559 @@
 
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { Spinner } from "@/app/components/ui/Loader";
+import { ToastStack, useToast } from "@/app/components/ui/Toast";
+
+type FieldErrors = Partial<
+  Record<"virtualCardCode" | "pin" | "nationalId" | "employeeName" | "amount", string>
+>;
+
+const API_FIELD_MAP: Record<string, keyof FieldErrors> = {
+  CardHolderName: "employeeName",
+  NationalId: "nationalId",
+  VirtualCardCode: "virtualCardCode",
+  Pin: "pin",
+  Amount: "amount",
+};
+
+type FriendlyError = { message: string; field?: keyof FieldErrors };
+
+function parseFriendlyError(raw: string): FriendlyError {
+  const lower = raw.toLowerCase();
+
+  // National ID
+  if (lower.includes("recipient not found") || lower.includes("user not found") || lower.includes("national id"))
+    return {
+      field: "nationalId",
+      message: "No account was found with this National ID. Please double-check the number.",
+    };
+
+  // Virtual card code
+  if (
+    lower.includes("card not found") ||
+    lower.includes("virtual card not found") ||
+    lower.includes("invalid card") ||
+    lower.includes("card does not exist") ||
+    lower.includes("card code")
+  )
+    return {
+      field: "virtualCardCode",
+      message: "This card code is invalid or doesn't exist. Please check and try again.",
+    };
+
+  // PIN
+  if (
+    lower.includes("invalid pin") ||
+    lower.includes("incorrect pin") ||
+    lower.includes("wrong pin") ||
+    lower.includes("pin mismatch") ||
+    lower.includes("pin is invalid") ||
+    lower.includes("pin is incorrect")
+  )
+    return {
+      field: "pin",
+      message: "The PIN you entered is incorrect. Please try again.",
+    };
+
+  // Cardholder name
+  if (
+    lower.includes("name mismatch") ||
+    lower.includes("name does not match") ||
+    lower.includes("name doesn't match") ||
+    lower.includes("invalid name") ||
+    lower.includes("cardholder name") ||
+    lower.includes("card holder name")
+  )
+    return {
+      field: "employeeName",
+      message: "The cardholder name doesn't match our records. Please check and try again.",
+    };
+
+  // Balance / card state
+  if (lower.includes("insufficient balance") || lower.includes("not enough balance"))
+    return { message: "This card doesn't have enough balance to cover the requested amount." };
+  if (lower.includes("expired"))
+    return { message: "This card has expired and can no longer be used." };
+  if (lower.includes("blocked") || lower.includes("suspended"))
+    return { message: "This card is blocked. Please contact support." };
+
+  return { message: raw || "Redemption failed. Please try again." };
+}
 
 export default function RedeemPointsPage() {
+  const { toasts, showToast, removeToast } = useToast();
   const [virtualCardCode, setVirtualCardCode] = useState("");
   const [pin, setPin] = useState("");
   const [nationalId, setNationalId] = useState("");
   const [employeeName, setEmployeeName] = useState("");
+  const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [successModal, setSuccessModal] = useState<{
+    amount: number;
+    virtualCardCode: string;
+  } | null>(null);
 
-  const handleSubmit = (event?: FormEvent<HTMLFormElement>) => {
+  function clearFieldError(field: keyof FieldErrors) {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  }
+
+  function inputClass(field: keyof FieldErrors, extra = "") {
+    const err = !!fieldErrors[field];
+    return [
+      "w-full rounded-2xl border py-3 text-sm text-slate-900 outline-none transition focus:ring-2",
+      err
+        ? "border-rose-400 bg-rose-50/40 focus:border-rose-400 focus:ring-rose-300/30"
+        : "border-slate-200 bg-white focus:border-[#19BBB6] focus:ring-[#19BBB6]/20",
+      "shadow-[0_12px_30px_-24px_rgba(0,107,106,0.35)]",
+      extra,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  function FieldError({ field }: { field: keyof FieldErrors }) {
+    if (!fieldErrors[field]) return null;
+    return (
+      <p className="flex items-center gap-1 text-xs font-medium text-rose-600">
+        <svg className="h-3 w-3 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+          <path
+            fillRule="evenodd"
+            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z"
+            clipRule="evenodd"
+          />
+        </svg>
+        {fieldErrors[field]}
+      </p>
+    );
+  }
+
+  function validate(): FieldErrors {
+    const errors: FieldErrors = {};
+
+    if (!virtualCardCode.trim()) {
+      errors.virtualCardCode = "Virtual card code is required.";
+    } else if (!/^\d{16}$/.test(virtualCardCode.trim())) {
+      errors.virtualCardCode = "Card code must be exactly 16 digits.";
+    }
+
+    if (!pin.trim()) {
+      errors.pin = "PIN is required.";
+    } else if (!/^\d{4}$/.test(pin.trim())) {
+      errors.pin = "PIN must be exactly 4 digits.";
+    }
+
+    if (!nationalId.trim()) {
+      errors.nationalId = "National ID is required.";
+    } else if (!/^\d{14}$/.test(nationalId.trim())) {
+      errors.nationalId = "National ID must be exactly 14 digits.";
+    }
+
+    if (!employeeName.trim()) errors.employeeName = "Cardholder name is required.";
+
+    if (!amount.trim()) {
+      errors.amount = "Amount is required.";
+    } else {
+      const parsed = Number(amount);
+      if (!Number.isFinite(parsed) || parsed <= 0)
+        errors.amount = "Enter a valid amount greater than 0.";
+    }
+    return errors;
+  }
+
+  const saveRecentRedemption = (payload: {
+    virtualCardCode: string;
+    nationalId: string;
+    employeeName: string;
+    amount: number;
+    timestamp: string;
+  }) => {
+    const existing = localStorage.getItem("recent_redeems");
+    const parsed = existing ? (JSON.parse(existing) as typeof payload[]) : [];
+    const updated = [payload, ...parsed].slice(0, 10);
+    localStorage.setItem("recent_redeems", JSON.stringify(updated));
+  };
+
+  const handleSubmit = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
-    setIsSubmitting(true);
     setSuccessMessage("");
     setErrorMessage("");
 
-    setTimeout(() => {
+    const errors = validate();
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+    setFieldErrors({});
+    setIsSubmitting(true);
+
+    const token = localStorage.getItem("partner_token");
+    if (!token) {
       setIsSubmitting(false);
-      setSuccessMessage("Coupon verified! Balance deducted successfully. Amount: 500 EGP");
+      const message = "Please sign in to redeem points.";
+      setErrorMessage(message);
+      showToast({ title: "Sign in required", message, variant: "error" });
+      return;
+    }
+
+    const parsedAmount = Number(amount);
+
+    try {
+      const response = await fetch("/api/partners/redeem-points", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          nationalId,
+          virtualCardCode,
+          cardHolderName: employeeName,
+          amount: parsedAmount,
+          pin,
+        }),
+      });
+
+      const responseText = await response.text();
+      let payload: unknown = null;
+      try {
+        payload = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        payload = responseText;
+      }
+
+      if (!response.ok) {
+        // Map API validation errors back to field highlights
+        if (
+          typeof payload === "object" &&
+          payload !== null &&
+          "errors" in payload &&
+          typeof (payload as { errors?: unknown }).errors === "object" &&
+          (payload as { errors?: unknown }).errors !== null
+        ) {
+          const apiErrors = (payload as { errors: Record<string, string[]> }).errors;
+          const mapped: FieldErrors = {};
+          for (const [key, msgs] of Object.entries(apiErrors)) {
+            const localKey = API_FIELD_MAP[key];
+            if (localKey) mapped[localKey] = msgs[0] ?? `${key} is invalid.`;
+          }
+          if (Object.keys(mapped).length > 0) {
+            setFieldErrors(mapped);
+            setIsSubmitting(false);
+            return;
+          }
+        }
+
+        const rawMessage =
+          typeof payload === "object" && payload !== null && "message" in payload
+            ? String((payload as { message?: string }).message)
+            : responseText || "Redemption failed. Please try again.";
+        const friendly = parseFriendlyError(rawMessage);
+        if (friendly.field) {
+          setFieldErrors({ [friendly.field]: friendly.message });
+          setIsSubmitting(false);
+          return;
+        }
+        throw new Error(friendly.message);
+      }
+
+      const successDetail =
+        typeof payload === "object" && payload !== null && "message" in payload
+          ? String((payload as { message?: string }).message)
+          : `Amount: ${parsedAmount} EGP`;
+      setSuccessMessage(
+        `Coupon verified! Balance deducted successfully. ${successDetail}`
+      );
+      showToast({
+        title: "Redemption successful",
+        message: `${parsedAmount.toLocaleString()} EGP redeemed.`,
+        variant: "success",
+      });
+      setSuccessModal({ amount: parsedAmount, virtualCardCode });
+      saveRecentRedemption({
+        virtualCardCode,
+        nationalId,
+        employeeName,
+        amount: parsedAmount,
+        timestamp: new Date().toISOString(),
+      });
       setVirtualCardCode("");
       setPin("");
       setNationalId("");
       setEmployeeName("");
-    }, 2000);
+      setAmount("");
+    } catch (submitError) {
+      const message =
+        submitError instanceof Error ? submitError.message : "Redemption failed.";
+      setErrorMessage(message);
+      showToast({ title: "Redemption failed", message, variant: "error" });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/30 to-slate-50 py-10 px-4">
-      <section className="mx-auto max-w-6xl space-y-10">
-        {/* Header with gradient text */}
-        <div className="text-center">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-teal-100 px-4 py-1.5">
-            <div className="h-2 w-2 rounded-full bg-teal-600 animate-pulse"></div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-teal-800">
-              Point Redemption Portal
+    <div className="text-slate-900">
+      <ToastStack toasts={toasts} onClose={removeToast} />
+      {successModal ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-sm rounded-[28px] bg-white p-6 text-center shadow-[0_30px_90px_-40px_rgba(15,23,42,0.7)]">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+              <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="mt-5 text-xl font-semibold text-slate-900">Transaction successful</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              The redemption was completed and saved in recent activity.
             </p>
+            <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-left">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-slate-500">Amount</span>
+                <span className="font-semibold text-slate-900">
+                  {successModal.amount.toLocaleString()} EGP
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+                <span className="text-slate-500">Card code</span>
+                <span className="font-semibold text-slate-900">{successModal.virtualCardCode}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSuccessModal(null)}
+              className="mt-5 w-full rounded-2xl bg-[#006B6A] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[#006B6A]/20 transition hover:bg-[#19BBB6]"
+            >
+              Done
+            </button>
           </div>
-          <h1 className="mt-4 text-4xl font-bold bg-gradient-to-r from-[#006B68] to-[#19BBB6] bg-clip-text text-transparent">
-            Redeem Partner Points
-          </h1>
-          <p className="mt-3 text-base text-slate-600 max-w-md mx-auto">
-            Validate and redeem virtual card points seamlessly
-          </p>
         </div>
+      ) : null}
 
-        <div className="grid gap-8 lg:grid-cols-[1.1fr,0.9fr]">
-          {/* Main Card with enhanced styling */}
-          <div className="relative rounded-3xl bg-white p-8 shadow-2xl border border-slate-100 overflow-hidden">
-            {/* Decorative background elements */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-teal-100/20 to-transparent rounded-full blur-3xl -z-0"></div>
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-amber-100/20 to-transparent rounded-full blur-3xl -z-0"></div>
+      <section className="mx-auto w-full max-w-6xl space-y-8">
+        <header className="relative overflow-hidden rounded-[36px] border border-[#0f766e]/30 bg-[conic-gradient(from_180deg_at_50%_50%,#0d5f5a,#19BBB6,#FFC012,#0d5f5a)] p-[1px] shadow-[0_30px_80px_-50px_rgba(0,107,106,0.7)]">
+          <div className="relative rounded-[35px] bg-[linear-gradient(120deg,#0d5f5a,#19BBB6)] px-5 py-8 text-white sm:px-8 sm:py-10">
+            <div className="absolute -right-16 top-0 h-44 w-44 rounded-full bg-[#FFC012]/40 blur-3xl" />
+            <div className="absolute -left-12 bottom-0 h-40 w-40 rounded-full bg-white/20 blur-3xl" />
+            <div className="relative flex flex-wrap items-center justify-between gap-6">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/80">
+                  Redeem Points
+                </p>
+                <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">
+                  Redemption Command Center
+                </h1>
+                <p className="mt-2 max-w-xl text-sm text-white/80">
+                  Submit a precise request and redeem points in seconds.
+                </p>
+              </div>
+            </div>
+          </div>
+        </header>
 
-            <div className="relative z-10 space-y-8">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-gradient-to-br from-[#006B68] to-[#19BBB6] rounded-2xl blur-xl opacity-40"></div>
-                    <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#006B68] to-[#19BBB6] shadow-xl">
-                      <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Validation</p>
-                    <h2 className="text-2xl font-bold text-slate-900">Card Redemption</h2>
-                    <p className="mt-1 text-sm text-slate-500">Enter the details below to process the redemption</p>
-                  </div>
+        <div className="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
+          <div className="rounded-[30px] bg-[linear-gradient(135deg,#0d5f5a,#19BBB6,#FFC012)] p-[2px] shadow-[0_24px_70px_-45px_rgba(0,107,106,0.6)]">
+            <div className="rounded-[28px] bg-white p-6 sm:p-8">
+              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-900">Redeem a Virtual Card</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Enter the card details and redemption amount.
+                  </p>
                 </div>
-                <div className="rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-teal-700">
-                  Secure verification
+                <div className="rounded-full bg-[#006B6A]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-[#006B6A]">
+                  Required *
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-8">
-                <div className="space-y-5">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-600">Card Details</h3>
-                    <span className="text-xs text-slate-400">* Required fields</span>
+              <div className="mt-5 rounded-2xl border border-[#19BBB6]/20 bg-[#f4fbfa] px-4 py-3 text-sm text-[#006B6A]">
+                <p className="font-semibold">Check the details before submitting.</p>
+                <p className="mt-1 text-xs text-[#006B6A]/80">
+                  Once confirmed, the amount is deducted from the card balance and saved in recent
+                  activity.
+                </p>
+              </div>
+
+              <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-6">
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700">
+                      Virtual Card Code *
+                    </label>
+                    <input
+                      type="text"
+                      value={virtualCardCode}
+                      onChange={(e) => {
+                        setVirtualCardCode(e.target.value);
+                        clearFieldError("virtualCardCode");
+                      }}
+                      className={inputClass("virtualCardCode", "px-4")}
+                      placeholder="e.g 1008167401131443"
+                    />
+                    <FieldError field="virtualCardCode" />
+                    {!fieldErrors.virtualCardCode && (
+                      <p className="text-xs font-normal text-slate-500">Use the virtual card code.</p>
+                    )}
                   </div>
-                  <div className="grid gap-5 md:grid-cols-[2fr,1fr]">
-                    {/* Virtual Card Code */}
-                    <div className="group md:col-span-1">
-                      <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                        <svg className="h-4 w-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700">PIN *</label>
+                    <input
+                      type="password"
+                      value={pin}
+                      onChange={(e) => {
+                        setPin(e.target.value);
+                        clearFieldError("pin");
+                      }}
+                      className={inputClass("pin", "px-4")}
+                      placeholder="4-digit PIN"
+                      maxLength={4}
+                    />
+                    <FieldError field="pin" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">National ID *</label>
+                  <input
+                    type="text"
+                    value={nationalId}
+                    onChange={(e) => {
+                      setNationalId(e.target.value);
+                      clearFieldError("nationalId");
+                    }}
+                    className={inputClass("nationalId", "px-4")}
+                    placeholder="e.g 29806112501614"
+                  />
+                  <FieldError field="nationalId" />
+                </div>
+
+                <div className="grid gap-5 sm:grid-cols-[1.2fr,0.8fr]">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700">
+                      Card Holder Name *
+                    </label>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-slate-400">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.8}
+                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                          />
                         </svg>
-                        Virtual Card Code *
-                      </label>
+                      </span>
                       <input
                         type="text"
-                        value={virtualCardCode}
-                        onChange={(e) => setVirtualCardCode(e.target.value)}
-                        className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 py-3.5 text-slate-900 outline-none transition-all focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 group-hover:border-slate-300"
-                        placeholder="e.g 00-00-0000-Code"
+                        value={employeeName}
+                        onChange={(e) => {
+                          setEmployeeName(e.target.value);
+                          clearFieldError("employeeName");
+                        }}
+                        className={inputClass("employeeName", "pl-10 pr-4")}
+                        placeholder="e.g Malak Shams"
                       />
                     </div>
-
-                    {/* PIN */}
-                    <div className="group md:col-span-1">
-                      <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                        <svg className="h-4 w-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                        PIN *
-                      </label>
-                      <input
-                        type="password"
-                        value={pin}
-                        onChange={(e) => setPin(e.target.value)}
-                        className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 py-3.5 text-slate-900 outline-none transition-all focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 group-hover:border-slate-300"
-                        placeholder="4-digit PIN"
-                        maxLength={4}
-                      />
-                    </div>
+                    <FieldError field="employeeName" />
+                    {!fieldErrors.employeeName && (
+                      <p className="text-xs font-normal text-slate-500">
+                        Enter the name as it appears on the card.
+                      </p>
+                    )}
                   </div>
 
-                  {/* National ID */}
-                  <div className="group">
-                    <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                      <svg className="h-4 w-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
-                      </svg>
-                      National ID *
-                    </label>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700">Amount (EGP) *</label>
                     <input
-                      type="text"
-                      value={nationalId}
-                      onChange={(e) => setNationalId(e.target.value)}
-                      className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 py-3.5 text-slate-900 outline-none transition-all focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 group-hover:border-slate-300"
-                      placeholder="e.g 29806112501614"
+                      type="number"
+                      min="1"
+                      step="0.01"
+                      value={amount}
+                      onChange={(e) => {
+                        setAmount(e.target.value);
+                        clearFieldError("amount");
+                      }}
+                      className={inputClass("amount", "px-4")}
+                      placeholder="e.g 500"
                     />
+                    <FieldError field="amount" />
                   </div>
                 </div>
 
-                <div className="space-y-4 border-t border-slate-100 pt-6">
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-600">Employee Details</h3>
-                  {/* Employee Name */}
-                  <div className="group">
-                    <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                      <svg className="h-4 w-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                {successMessage ? (
+                  <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                       </svg>
-                      Employee Name
-                    </label>
-                    <input
-                      type="text"
-                      value={employeeName}
-                      onChange={(e) => setEmployeeName(e.target.value)}
-                      className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 py-3.5 text-slate-900 outline-none transition-all focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 group-hover:border-slate-300"
-                      placeholder="e.g Hossam Mustang"
-                    />
-                    <p className="mt-2 text-xs text-slate-500">Optional but recommended for branch tracking.</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-emerald-800">Redemption successful</p>
+                      <p className="mt-0.5 text-xs text-emerald-700">{successMessage}</p>
+                    </div>
                   </div>
-                </div>
+                ) : null}
 
-                <div className="space-y-4">
-                  {/* Success Message */}
-                  {successMessage && (
-                    <div className="rounded-xl border-2 border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 rounded-full bg-emerald-100 p-1">
-                          <svg className="h-5 w-5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-emerald-900">Success!</p>
-                          <p className="text-sm text-emerald-700 mt-0.5">{successMessage}</p>
-                        </div>
-                      </div>
+                {errorMessage ? (
+                  <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+                    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-500 text-white">
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </div>
-                  )}
-
-                  {/* Error Message */}
-                  {errorMessage && (
-                    <div className="rounded-xl border-2 border-red-200 bg-gradient-to-r from-red-50 to-rose-50 p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 rounded-full bg-red-100 p-1">
-                          <svg className="h-5 w-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-red-900">Error</p>
-                          <p className="text-sm text-red-700 mt-0.5">{errorMessage}</p>
-                        </div>
-                      </div>
+                    <div>
+                      <p className="text-sm font-semibold text-rose-800">Something went wrong</p>
+                      <p className="mt-0.5 text-xs text-rose-700">{errorMessage}</p>
                     </div>
-                  )}
-                </div>
+                  </div>
+                ) : null}
 
-                {/* Enhanced Submit Button */}
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-[#006B68] to-[#19BBB6] py-4 font-bold text-white shadow-lg transition-all hover:shadow-2xl hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+                  className="group relative w-full overflow-hidden rounded-2xl bg-[#006B6A] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[#006B6A]/30 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:bg-[#19BBB6] disabled:cursor-not-allowed disabled:bg-[#19BBB6]/50"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#19BBB6] to-[#006B68] opacity-0 transition-opacity group-hover:opacity-100"></div>
-                  <span className="relative flex items-center justify-center gap-2">
-                    {isSubmitting ? (
-                      <>
-                        <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
-                        Validating...
-                      </>
-                    ) : (
-                      <>
-                        <span>Validate & Redeem</span>
-                        <svg className="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                        </svg>
-                      </>
-                    )}
+                  <span className="relative z-10 inline-flex items-center justify-center gap-2">
+                    {isSubmitting ? <Spinner /> : null}
+                    {isSubmitting ? "Submitting..." : "Redeem Points"}
                   </span>
+                  <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-[#19BBB6] to-[#FFC012] opacity-80 transition-transform duration-700 ease-out group-hover:translate-x-0" />
                 </button>
               </form>
             </div>
           </div>
 
           <aside className="space-y-6">
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
-              <h3 className="text-lg font-bold text-slate-900">Redemption Flow</h3>
-              <p className="mt-2 text-sm text-slate-500">Follow these steps to complete a secure redemption.</p>
+            <div className="rounded-[28px] border border-[#19BBB6]/20 bg-white p-6 shadow-[0_16px_45px_-35px_rgba(0,107,106,0.35)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#006B6A]">
+                Redemption Flow
+              </p>
+              <h3 className="mt-3 text-xl font-semibold text-slate-900">Quick guide</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                A short checklist to keep redemptions clean and fast.
+              </p>
               <div className="mt-6 space-y-4">
                 {[
                   "Confirm the virtual card code and PIN.",
-                  "Enter the national ID exactly as shown.",
-                  "Review the employee name for auditing.",
-                  "Submit and wait for the confirmation banner.",
+                  "Make sure the national ID is correct.",
+                  "Enter the cardholder name as it appears on the card.",
+                  "Submit and wait for confirmation.",
                 ].map((step, index) => (
                   <div key={step} className="flex items-start gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-sm font-semibold text-teal-700">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#006B6A]/10 text-sm font-semibold text-[#006B6A]">
                       {index + 1}
                     </div>
-                    <p className="text-sm text-slate-700 leading-relaxed">{step}</p>
+                    <p className="text-sm text-slate-700">{step}</p>
                   </div>
                 ))}
-              </div>
-            </div>
-
-            <div className="relative rounded-3xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50 p-6 shadow-lg overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-200/20 rounded-full blur-2xl"></div>
-              <div className="relative">
-                <h3 className="mb-4 flex items-center gap-2.5 text-lg font-bold text-amber-900">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-200">
-                    <svg className="h-5 w-5 text-amber-700" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  Important Notes
-                </h3>
-                <ul className="space-y-3 text-sm text-slate-700">
-                  <li className="flex items-start gap-3 group">
-                    <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-amber-200 group-hover:bg-amber-300 transition-colors">
-                      <svg className="h-3 w-3 text-amber-700" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <span className="leading-relaxed">Ensure the virtual card code is entered correctly before submission.</span>
-                  </li>
-                  <li className="flex items-start gap-3 group">
-                    <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-amber-200 group-hover:bg-amber-300 transition-colors">
-                      <svg className="h-3 w-3 text-amber-700" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <span className="leading-relaxed">Verify card code and PIN accuracy to avoid processing errors.</span>
-                  </li>
-                  <li className="flex items-start gap-3 group">
-                    <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-amber-200 group-hover:bg-amber-300 transition-colors">
-                      <svg className="h-3 w-3 text-amber-700" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <span className="leading-relaxed">Record employee names for branch transparency and auditability.</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
-              <h3 className="text-lg font-bold text-slate-900">Need a second pair of eyes?</h3>
-              <p className="mt-2 text-sm text-slate-600">Double-check the card code and ID before submitting. It saves time on retries.</p>
-              <div className="mt-4 flex items-center gap-3 text-sm font-semibold text-teal-700">
-                <div className="h-2 w-2 rounded-full bg-teal-500"></div>
-                Secure audit trail enabled
               </div>
             </div>
           </aside>

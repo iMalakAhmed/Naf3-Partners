@@ -1,171 +1,224 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
+type RecentRedemption = {
+  virtualCardCode: string;
+  nationalId: string;
+  employeeName: string;
+  amount: number;
+  timestamp: string;
+};
+
+const formatDateTime = (value: string) => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return parsed.toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
 
 export default function ProfilePage() {
   const router = useRouter();
+  const [partnerName, setPartnerName] = useState("Partner");
+  const [branchName, setBranchName] = useState("Branch");
+  const [recentRedemptions, setRecentRedemptions] = useState<RecentRedemption[]>([]);
 
   const handleLogout = () => {
     localStorage.removeItem("partner_token");
     router.push("/auth/login");
   };
 
+  useEffect(() => {
+    const storedName = localStorage.getItem("partner_name")?.trim();
+    const storedBranch = localStorage.getItem("partner_branch")?.trim();
+    if (storedName) setPartnerName(storedName);
+    if (storedBranch) setBranchName(storedBranch);
+
+    const storedRedemptions = localStorage.getItem("recent_redeems");
+    if (!storedRedemptions) return;
+    try {
+      const parsed = JSON.parse(storedRedemptions) as RecentRedemption[];
+      if (Array.isArray(parsed)) {
+        setRecentRedemptions(parsed.slice(0, 4));
+      }
+    } catch {
+      setRecentRedemptions([]);
+    }
+  }, []);
+
+  const totalRecentAmount = recentRedemptions.reduce(
+    (sum, item) => sum + (Number.isFinite(item.amount) ? item.amount : 0),
+    0
+  );
+  const lastRedemption = recentRedemptions[0]?.timestamp
+    ? formatDateTime(recentRedemptions[0].timestamp)
+    : "-";
+
   return (
     <section className="space-y-6">
-      <div className="overflow-hidden rounded-[28px] border border-[#19BBB6]/15 bg-white shadow-[0_24px_60px_-45px_rgba(0,107,106,0.5)]">
-        <div className="relative bg-[linear-gradient(120deg,#006B6A_0%,#19BBB6_55%,#FFC012_120%)] px-6 py-8 text-white sm:px-8">
-          <div className="absolute inset-0 opacity-30">
-            <div className="absolute -left-10 -top-10 h-36 w-36 rounded-full bg-white/40 blur-2xl" />
-            <div className="absolute right-8 top-8 h-28 w-28 rounded-full bg-white/30 blur-2xl" />
+      <div className="rounded-[32px] border border-[#006B6A]/20 bg-[linear-gradient(120deg,#0d5f5a,#19BBB6)] px-5 py-7 text-white shadow-[0_28px_70px_-45px_rgba(0,107,106,0.6)] sm:px-8 sm:py-10">
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/80">
+              Profile
+            </p>
+            <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">
+              {partnerName}
+            </h1>
+            <p className="mt-2 text-sm text-white/80">
+              {branchName} - Partner
+            </p>
           </div>
-          <div className="relative flex flex-wrap items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 text-2xl font-semibold">
-              AC
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs uppercase tracking-[0.3em] text-white/80">
-                Profile
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-full border border-red-200 bg-red-500 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-red-900/15 transition hover:bg-red-600"
+            >
+              Log out
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_16px_45px_-35px_rgba(0,107,106,0.35)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-zinc-400">
+            Branch
+          </p>
+          <p className="mt-3 text-xl font-semibold text-zinc-900">{branchName}</p>
+        </div>
+        <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_16px_45px_-35px_rgba(0,107,106,0.35)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-zinc-400">
+            Recent redemptions
+          </p>
+          <p className="mt-3 text-xl font-semibold text-zinc-900">
+            {recentRedemptions.length}
+          </p>
+        </div>
+        <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_16px_45px_-35px_rgba(0,107,106,0.35)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-zinc-400">
+            Recent total
+          </p>
+          <p className="mt-3 text-xl font-semibold text-zinc-900">
+            {totalRecentAmount.toLocaleString()} EGP
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr,0.85fr]">
+        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_20px_55px_-38px_rgba(0,107,106,0.35)] sm:p-8">
+          <div className="border-b border-slate-100 pb-4">
+            <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
+              Branch details
+            </p>
+            <h3 className="mt-2 text-lg font-semibold text-zinc-900">
+              Organization information
+            </h3>
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">
+                Partner name
               </p>
-              <h2 className="text-2xl font-semibold">Ahmed Corp</h2>
-              <p className="text-sm text-white/80">Cairo Branch • Partner</p>
+              <p className="mt-2 text-sm font-semibold text-zinc-900">
+                {partnerName}
+              </p>
             </div>
-            <div className="ml-auto flex flex-wrap gap-2">
-              <button className="rounded-full bg-white/15 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/25">
-                Edit profile
-              </button>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="rounded-full border border-white/40 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/15"
-              >
-                Log out
-              </button>
+            <div className="rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">
+                Branch name
+              </p>
+              <p className="mt-2 text-sm font-semibold text-zinc-900">
+                {branchName}
+              </p>
             </div>
+          </div>
+          <div className="mt-5 rounded-2xl border border-[#19BBB6]/20 bg-[#f4fbfa] px-4 py-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#006B6A]">
+              Last redemption
+            </p>
+            <p className="mt-2 text-sm font-semibold text-zinc-900">{lastRedemption}</p>
           </div>
         </div>
 
-        <div className="grid gap-6 px-6 py-8 sm:px-8 lg:grid-cols-[1.4fr_0.6fr]">
-          <div className="space-y-6">
-            <div className="rounded-[22px] border border-[#19BBB6]/15 bg-white p-6">
-              <div className="flex items-center justify-between">
+        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_20px_55px_-38px_rgba(0,107,106,0.35)] sm:p-8">
+          <div className="border-b border-slate-100 pb-4">
+            <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
+              Quick actions
+            </p>
+            <h3 className="mt-2 text-lg font-semibold text-zinc-900">
+              Partner tools
+            </h3>
+          </div>
+          <div className="mt-5 grid gap-3">
+            <button
+              type="button"
+              onClick={() => router.push("/redeem-points")}
+              className="rounded-2xl bg-[#006B6A] px-4 py-3 text-left text-sm font-semibold text-white shadow-lg shadow-[#006B6A]/20 transition hover:bg-[#19BBB6]"
+            >
+              Redeem points
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/transactions")}
+              className="rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-zinc-700 transition hover:border-[#19BBB6] hover:text-[#006B6A]"
+            >
+              View transactions
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_20px_55px_-38px_rgba(0,107,106,0.35)] sm:p-8">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
+              Recent activity
+            </p>
+            <h3 className="mt-2 text-lg font-semibold text-zinc-900">
+              Latest local redemptions
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => router.push("/transactions")}
+            className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-zinc-600 transition hover:border-[#19BBB6] hover:text-[#006B6A]"
+          >
+            View all
+          </button>
+        </div>
+        <div className="mt-5 space-y-3">
+          {recentRedemptions.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+              No recent redemptions on this device.
+            </div>
+          ) : (
+            recentRedemptions.map((item) => (
+              <div
+                key={`${item.virtualCardCode}-${item.timestamp}`}
+                className="grid gap-3 rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-4 sm:grid-cols-[1fr,auto] sm:items-center"
+              >
                 <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
-                    Branch details
+                  <p className="text-sm font-semibold text-zinc-900">
+                    {item.employeeName || item.virtualCardCode || "Redemption"}
                   </p>
-                  <h3 className="mt-2 text-lg font-semibold text-zinc-900">
-                    Organization information
-                  </h3>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {formatDateTime(item.timestamp)}
+                  </p>
                 </div>
-                <span className="rounded-full bg-[#006B6A]/10 px-3 py-1 text-xs font-semibold text-[#006B6A]">
-                  Active
-                </span>
+                <p className="text-sm font-bold text-[#006B6A]">
+                  {item.amount.toLocaleString()} EGP
+                </p>
               </div>
-              <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                  Branch name
-                  <input
-                    defaultValue="Cairo Branch"
-                    className="mt-2 w-full rounded-2xl border border-zinc-200 bg-[#f7fbfb] px-4 py-3 text-sm font-medium text-zinc-700 outline-none transition focus:border-[#19BBB6] focus:bg-white focus:ring-2 focus:ring-[#19BBB6]/20"
-                  />
-                </label>
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                  Partner name
-                  <input
-                    defaultValue="Ahmed Corp"
-                    className="mt-2 w-full rounded-2xl border border-zinc-200 bg-[#f7fbfb] px-4 py-3 text-sm font-medium text-zinc-700 outline-none transition focus:border-[#19BBB6] focus:bg-white focus:ring-2 focus:ring-[#19BBB6]/20"
-                  />
-                </label>
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                  Branch email
-                  <input
-                    defaultValue="cairo.branch@naf3.org"
-                    type="email"
-                    className="mt-2 w-full rounded-2xl border border-zinc-200 bg-[#f7fbfb] px-4 py-3 text-sm font-medium text-zinc-700 outline-none transition focus:border-[#19BBB6] focus:bg-white focus:ring-2 focus:ring-[#19BBB6]/20"
-                  />
-                </label>
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                  Phone number
-                  <input
-                    defaultValue="+20 10 1234 5678"
-                    className="mt-2 w-full rounded-2xl border border-zinc-200 bg-[#f7fbfb] px-4 py-3 text-sm font-medium text-zinc-700 outline-none transition focus:border-[#19BBB6] focus:bg-white focus:ring-2 focus:ring-[#19BBB6]/20"
-                  />
-                </label>
-              </div>
-              <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-5">
-                <button className="rounded-2xl bg-[#006B6A] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[#006B6A]/30 transition hover:bg-[#19BBB6]">
-                  Save changes
-                </button>
-                <button className="rounded-2xl border border-zinc-200 px-5 py-3 text-sm font-semibold text-zinc-600 transition hover:border-[#006B6A] hover:text-[#006B6A]">
-                  Cancel
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-[22px] border border-[#19BBB6]/15 bg-white p-6">
-              <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
-                Contact person
-              </p>
-              <h3 className="mt-2 text-lg font-semibold text-zinc-900">
-                Primary branch contact
-              </h3>
-              <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4 text-sm">
-                  <p className="text-xs uppercase tracking-[0.2em] text-zinc-400">
-                    Name
-                  </p>
-                  <p className="mt-2 font-semibold text-zinc-900">
-                    Amina Soliman
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4 text-sm">
-                  <p className="text-xs uppercase tracking-[0.2em] text-zinc-400">
-                    Role
-                  </p>
-                  <p className="mt-2 font-semibold text-zinc-900">
-                    Branch manager
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4 text-sm">
-                  <p className="text-xs uppercase tracking-[0.2em] text-zinc-400">
-                    Hours
-                  </p>
-                  <p className="mt-2 font-semibold text-zinc-900">
-                    9:00 - 18:00
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="rounded-[22px] border border-[#19BBB6]/15 bg-white p-6">
-              <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
-                Account overview
-              </p>
-              <h3 className="mt-2 text-lg font-semibold text-zinc-900">
-                Performance snapshot
-              </h3>
-              <div className="mt-5 space-y-4 text-sm text-zinc-600">
-                <div className="flex items-center justify-between rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3">
-                  <span>Active staff</span>
-                  <span className="font-semibold text-zinc-900">12</span>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3">
-                  <span>Monthly approvals</span>
-                  <span className="font-semibold text-zinc-900">38</span>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3">
-                  <span>Average approval time</span>
-                  <span className="font-semibold text-zinc-900">2h 10m</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-[22px] border border-[#19BBB6]/15 bg-[#FFF8E5] p-5 text-sm text-[#6B4A00]">
-              Keep your contact info current so the Naf3 team can reach you
-              quickly about approvals.
-            </div>
-          </div>
+            ))
+          )}
         </div>
       </div>
     </section>

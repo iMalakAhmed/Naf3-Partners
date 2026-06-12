@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Spinner } from "@/app/components/ui/Loader";
+import { ToastStack, useToast } from "@/app/components/ui/Toast";
 
 const LOGIN_ENDPOINT = "/api/auth/partner/login";
 
 export default function PartnerLoginPage() {
   const router = useRouter();
+  const { toasts, showToast, removeToast } = useToast();
   const [name, setName] = useState("");
   const [branch, setBranch] = useState("");
   const [password, setPassword] = useState("");
@@ -50,11 +53,21 @@ export default function PartnerLoginPage() {
         localStorage.setItem("partner_branch", trimmedBranch);
       }
 
+      showToast({
+        title: "Signed in",
+        message: "Opening your dashboard.",
+        variant: "success",
+      });
       router.push("/dashboard");
     } catch (submitError) {
       const message =
         submitError instanceof Error ? submitError.message : "Login failed.";
       setError(message);
+      showToast({
+        title: "Sign in failed",
+        message,
+        variant: "error",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -62,6 +75,7 @@ export default function PartnerLoginPage() {
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f4f7f5] px-4 py-10 text-zinc-900 sm:px-6">
+      <ToastStack toasts={toasts} onClose={removeToast} />
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -left-24 -top-24 h-96 w-96 animate-blob rounded-full bg-[#006B6A]/20 blur-3xl" />
         <div className="animation-delay-2000 absolute -right-28 -top-20 h-96 w-96 animate-blob rounded-full bg-[#19BBB6]/25 blur-3xl" />
@@ -175,7 +189,10 @@ export default function PartnerLoginPage() {
               disabled={isSubmitting}
               className="w-full rounded-2xl bg-[#006B6A] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[#006B6A]/30 transition hover:bg-[#19BBB6] disabled:cursor-not-allowed disabled:bg-[#19BBB6]/50"
             >
-              {isSubmitting ? "Signing in..." : "Sign in"}
+              <span className="inline-flex items-center justify-center gap-2">
+                {isSubmitting ? <Spinner /> : null}
+                {isSubmitting ? "Signing in..." : "Sign in"}
+              </span>
             </button>
           </form>
         </section>
