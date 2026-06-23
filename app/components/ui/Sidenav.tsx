@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -77,17 +77,6 @@ type SidenavProps = {
   toggleSidebar: () => void;
 };
 
-function UserIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden>
-      <path
-        fill="currentColor"
-        d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-3.34 0-6 1.46-6 3.25V20h12v-2.75C18 15.46 15.34 14 12 14Z"
-      />
-    </svg>
-  );
-}
-
 function ChevronIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden>
@@ -140,12 +129,6 @@ function NavLink({
 export default function Sidenav({ isOpen, toggleSidebar }: SidenavProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [partnerName, setPartnerName] = useState("Partner");
-
-  useEffect(() => {
-    const savedName = localStorage.getItem("partner_name")?.trim();
-    if (savedName) setPartnerName(savedName);
-  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("partner_token");
@@ -159,26 +142,44 @@ export default function Sidenav({ isOpen, toggleSidebar }: SidenavProps) {
       } bg-[linear-gradient(180deg,#005a56_0%,#006B6A_48%,#00514e_100%)]`}
     >
       <div
-        className={`flex items-center gap-4 border-b border-white/12 px-4 py-6 ${
-          isOpen ? "justify-between" : "justify-center"
+        className={`flex ${
+          isOpen
+            ? "items-center gap-3 px-4 py-5"
+            : "flex-col items-center justify-center gap-3 px-0 py-5"
         }`}
       >
         {isOpen ? (
-          <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/75 text-[#006B6A]">
-              <UserIcon className="h-7 w-7" />
-            </div>
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <Image
+              src="/LOGO-FILLED-WHITE.svg"
+              alt="Logo"
+              width={72}
+              height={72}
+              className="h-16 w-16 shrink-0"
+            />
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-white/70">Welcome back!</p>
-              <p className="truncate text-lg font-bold text-white">{partnerName}</p>
+              <p className="whitespace-nowrap text-sm font-semibold leading-5 text-white/70">
+                Welcome back!
+              </p>
+              <p className="truncate text-xl font-bold leading-6 text-white">
+                Carrefour
+              </p>
             </div>
           </div>
-        ) : null}
+        ) : (
+          <Image
+            src="/LOGO-FILLED-WHITE.svg"
+            alt="Logo"
+            width={56}
+            height={56}
+            className="h-14 w-14 shrink-0"
+          />
+        )}
         <button
           type="button"
           onClick={toggleSidebar}
           title="Toggle sidebar"
-          className="rounded-full p-2 text-white/85 transition hover:bg-white/10 hover:text-white"
+          className="shrink-0 rounded-full p-2 text-white/85 transition hover:bg-white/10 hover:text-white"
         >
           <ChevronIcon
             className={`h-7 w-7 transition-transform ${isOpen ? "" : "rotate-180"}`}
@@ -186,7 +187,7 @@ export default function Sidenav({ isOpen, toggleSidebar }: SidenavProps) {
         </button>
       </div>
 
-      <nav className="mt-8 grid gap-3">
+      <nav className="mt-2 grid gap-3 border-t border-white/12 pt-8">
         {mainNavItems.map((item) => {
           const active =
             item.href === "/dashboard"
